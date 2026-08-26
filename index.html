@@ -19,12 +19,15 @@
     textarea:focus { outline: none; border-color: #8b5cf6; }
     .actions { display: flex; justify-content: space-between; align-items: center; }
     input[type="text"] { background: #0f172a; border: 1px solid #475569; border-radius: 6px; color: #fff; padding: 8px 10px; font-size: 0.9rem; width: 130px; pointer-events: auto !important; user-select: text !important; -webkit-user-select: text !important; }
-    button { background: #8b5cf6; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; pointer-events: auto !important; }
+    button.btn-pub { background: #8b5cf6; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; pointer-events: auto !important; }
     .feed { display: flex; flex-direction: column; gap: 15px; margin-top: 20px; }
     .post { background: #1e293b; border-radius: 12px; padding: 15px; border: 1px solid #334155; }
     .post-header { display: flex; justify-content: space-between; font-size: 0.85rem; color: #94a3b8; margin-bottom: 8px; }
     .post-author { color: #38bdf8; font-weight: 600; }
-    .post-content { font-size: 1rem; line-height: 1.4; color: #e2e8f0; word-break: break-word; }
+    .post-content { font-size: 1rem; line-height: 1.4; color: #e2e8f0; word-break: break-word; margin-bottom: 12px; }
+    .post-footer { display: flex; align-items: center; border-top: 1px solid #334155; padding-top: 10px; }
+    .like-btn { background: transparent; border: 1px solid #475569; color: #f43f5e; padding: 6px 14px; border-radius: 20px; font-size: 0.85rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s; }
+    .like-btn:active { transform: scale(0.95); background: rgba(244, 63, 94, 0.1); }
   </style>
 </head>
 <body>
@@ -38,7 +41,7 @@
       <textarea id="postInput" placeholder="¿Qué está pasando en la comunidad?"></textarea>
       <div class="actions">
         <input type="text" id="userInput" placeholder="Tu usuario" value="UsuarioPi">
-        <button onclick="publicar()">Publicar</button>
+        <button class="btn-pub" onclick="publicar()">Publicar</button>
       </div>
     </div>
 
@@ -55,7 +58,7 @@
     }
     const database = firebase.database();
 
-    // Intentar conectar Pi SDK de forma segura
+    // Intentar conectar Pi SDK
     try {
       const Pi = window.Pi;
       Pi.init({ version: "2.0", sandbox: false });
@@ -71,7 +74,7 @@
       console.log("Pi SDK no disponible");
     }
 
-    // Función para guardar publicaciones en Firebase
+    // Función para guardar publicaciones
     function publicar() {
       const input = document.getElementById('postInput');
       const userInput = document.getElementById('userInput');
@@ -86,6 +89,7 @@
       const nuevaPublicacion = {
         usuario: usuario,
         texto: texto,
+        likes: 0,
         fecha: Date.now()
       };
 
@@ -98,6 +102,14 @@
         });
     }
 
+    // Función para reaccionar / dar Me gusta
+    function darLike(postId) {
+      const postRef = database.ref('publicaciones/' + postId + '/likes');
+      postRef.transaction((currentLikes) => {
+        return (currentLikes || 0) + 1;
+      });
+    }
+
     // Escuchar la base de datos en tiempo real
     database.ref('publicaciones').on('value', (snapshot) => {
       const feed = document.getElementById('feed');
@@ -105,9 +117,12 @@
       const data = snapshot.val();
 
       if (data) {
-        const posts = Object.values(data).reverse();
-        posts.forEach(post => {
+        const keys = Object.keys(data).reverse();
+        keys.forEach(key => {
+          const post = data[key];
           const fecha = new Date(post.fecha).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          const likesCount = post.likes || 0;
+
           const postEl = document.createElement('div');
           postEl.className = 'post';
           postEl.innerHTML = `
@@ -116,6 +131,11 @@
               <span>${fecha}</span>
             </div>
             <div class="post-content">${post.texto}</div>
+            <div class="post-footer">
+              <button class="like-btn" onclick="darLike('${key}')">
+                ❤️ <span>${likesCount}</span>
+              </button>
+            </div>
           `;
           feed.appendChild(postEl);
         });
