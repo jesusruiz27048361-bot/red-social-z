@@ -4,25 +4,28 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Z</title>
-  <!-- SDK Oficial de Pi Network -->
   <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 </head>
 <body>
   <h1>Bienvenido a Z</h1>
-  <p id="user-status">Iniciando sesión con Pi...</p>
+  <p id="user-status">Cargando...</p>
 
   <script>
-    // Inicialización del SDK
-    Pi.init({ version: "2.0", sandbox: true });
+    window.addEventListener('DOMContentLoaded', () => {
+      if (typeof Pi !== 'undefined') {
+        Pi.init({ version: "2.0", sandbox: true });
+        
+        const scopes = ['username'];
+        const onIncompletePaymentFound = (payment) => {};
 
-    // Autenticación automática de usuario
-    const scopes = ['username'];
-    function onIncompletePaymentFound(payment) { };
-
-    Pi.authenticate(scopes, onIncompletePaymentFound).then(function(auth) {
-      document.getElementById('user-status').innerText = "Hola, " + auth.user.username;
-    }).catch(function(error) {
-      console.error(error);
+        Pi.authenticate(scopes, onIncompletePaymentFound)
+          .then((auth) => {
+            document.getElementById('user-status').innerText = "Hola, " + auth.user.username;
+          })
+          .catch((err) => {
+            console.error("Error al autenticar:", err);
+          });
+      }
     });
   </script>
 </body>
