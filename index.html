@@ -3,27 +3,116 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Z</title>
+  <title>Z Social</title>
   <script src="https://sdk.minepi.com/pi-sdk.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    body { background-color: #0f172a; color: #f8fafc; display: flex; justify-content: center; min-height: 100vh; }
+    .container { width: 100%; max-width: 600px; padding: 15px; }
+    header { display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid #334155; }
+    h1 { color: #8b5cf6; font-size: 1.8rem; font-weight: 800; }
+    .user-badge { background: #1e293b; padding: 6px 12px; border-radius: 20px; font-size: 0.85rem; border: 1px solid #475569; }
+    .create-post { background: #1e293b; border-radius: 12px; padding: 15px; margin: 20px 0; border: 1px solid #334155; }
+    textarea { width: 100%; height: 90px; background: #0f172a; border: 1px solid #475569; border-radius: 8px; color: #fff; padding: 10px; resize: none; font-size: 0.95rem; }
+    textarea:focus { outline: none; border-color: #8b5cf6; }
+    .actions { display: flex; justify-content: flex-end; margin-top: 10px; }
+    button { background: #8b5cf6; color: white; border: none; padding: 8px 18px; border-radius: 6px; font-weight: 600; cursor: pointer; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .feed { display: flex; flex-direction: column; gap: 15px; }
+    .post { background: #1e293b; border-radius: 12px; padding: 15px; border: 1px solid #334155; }
+    .post-header { display: flex; justify-content: space-between; font-size: 0.85rem; color: #94a3b8; margin-bottom: 8px; }
+    .post-author { color: #38bdf8; font-weight: 600; }
+    .post-content { font-size: 1rem; line-height: 1.4; color: #e2e8f0; word-break: break-word; }
+  </style>
 </head>
 <body>
-  <h1>Bienvenido a Z</h1>
-  <p id="user-status">Conectando...</p>
+  <div class="container">
+    <header>
+      <h1>Z</h1>
+      <div id="userBadge" class="user-badge">Conectando a Pi...</div>
+    </header>
+
+    <div class="create-post">
+      <textarea id="postInput" placeholder="¿Qué está pasando?" disabled></textarea>
+      <div class="actions">
+        <button id="postBtn" onclick="publicar()" disabled>Publicar</button>
+      </div>
+    </div>
+
+    <div id="feed" class="feed"></div>
+  </div>
 
   <script>
-    Pi.init({ version: "2.0", sandbox: true });
+    // Configuración de Firebase con tu base de datos
+    const firebaseConfig = {
+      databaseURL: "https://z-social-62720-default-rtdb.firebaseio.com/"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
 
-    function onIncompletePaymentFound(payment) {
-      console.log("Pago incompleto:", payment);
+    let currentUser = null;
+
+    // Inicializar Pi SDK
+    const Pi = window.Pi;
+    Pi.init({ version: "2.0", sandbox: false });
+
+    Pi.authenticate(['username'], function(auth) {
+      currentUser = auth.user.username;
+      document.getElementById('userBadge').innerText = '@' + currentUser;
+      document.getElementById('postInput').disabled = false;
+      document.getElementById('postBtn').disabled = false;
+    }, function(error) {
+      document.getElementById('userBadge').innerText = 'Error de autenticación';
+      console.error(error);
+    });
+
+    // Función para guardar publicaciones en Firebase
+    function publicar() {
+      const input = document.getElementById('postInput');
+      const texto = input.value.trim();
+      
+      if (!texto || !currentUser) return;
+
+      const nuevaPublicacion = {
+        usuario: currentUser,
+        texto: texto,
+        fecha: Date.now()
+      };
+
+      database.ref('publicaciones').push(nuevaPublicacion)
+        .then(() => {
+          input.value = '';
+        })
+        .catch((err) => {
+          alert('Error al publicar: ' + err.message);
+        });
     }
 
-    Pi.authenticate(['username'], onIncompletePaymentFound)
-      .then(function(auth) {
-        document.getElementById('user-status').innerText = "Hola, " + auth.user.username;
-      })
-      .catch(function(error) {
-        console.error("Error al autenticar:", error);
-      });
+    // Escuchar la base de datos en tiempo real
+    database.ref('publicaciones').on('value', (snapshot) => {
+      const feed = document.getElementById('feed');
+      feed.innerHTML = '';
+      const data = snapshot.val();
+
+      if (data) {
+        const posts = Object.values(data).reverse();
+        posts.forEach(post => {
+          const fecha = new Date(post.fecha).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          const postEl = document.createElement('div');
+          postEl.className = 'post';
+          postEl.innerHTML = `
+            <div class="post-header">
+              <span class="post-author">@${post.usuario}</span>
+              <span>${fecha}</span>
+            </div>
+            <div class="post-content">${post.texto}</div>
+          `;
+          feed.appendChild(postEl);
+        });
+      }
+    });
   </script>
 </body>
 </html>
