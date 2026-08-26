@@ -1,32 +1,21 @@
 <!DOCTYPE html>
-<html lang="es">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Z</title>
-  <script src="https://sdk.minepi.com/pi-sdk.js"></script>
+    <meta charset="UTF-8">
+    <title>Z</title>
+    <script src="https://sdk.minepi.com/pi-sdk.js"></script>
+    <script>
+        Pi.init({ version: "2.0", sandbox: true });
+    </script>
 </head>
 <body>
-  <h1>Bienvenido a Z</h1>
-  <p id="user-status">Cargando...</p>
-
-  <script>
-    window.addEventListener('DOMContentLoaded', () => {
-      if (typeof Pi !== 'undefined') {
-        Pi.init({ version: "2.0", sandbox: true });
-        
-        const scopes = ['username'];
-        const onIncompletePaymentFound = (payment) => {};
-
-        Pi.authenticate(scopes, onIncompletePaymentFound)
-          .then((auth) => {
-            document.getElementById('user-status').innerText = "Hola, " + auth.user.username;
-          })
-          .catch((err) => {
-            console.error("Error al autenticar:", err);
-          });
-      }
-    });
-  </script>
+    <h1>Z Social</h1>
+    <script>
+        Pi.authenticate(['username', 'payments'], function(error) {
+            console.log(error);
+        }, function(auth) {
+            console.log(auth.user.username);
+        });
+    </script>
 </body>
 </html>
