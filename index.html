@@ -28,20 +28,23 @@
     .user-input-prefix { color: #64748b; font-size: 0.85rem; font-weight: 600; }
     input[type="text"] { background: transparent; border: none; color: #38bdf8; padding: 8px 4px; font-size: 0.88rem; font-weight: 600; width: 110px; }
     
-    button.btn-pub { background: linear-gradient(135deg, #8b5cf6, #6366f1); color: white; border: none; padding: 10px 22px; border-radius: 8px; font-weight: 600; font-size: 0.9rem; cursor: pointer; box-shadow: 0 2px 10px rgba(139, 92, 246, 0.3); transition: transform 0.1s; }
+    button.btn-pub { background: linear-gradient(135deg, #8b5cf6, #6366f1); color: white; border: none; padding: 10px 22px; border-radius: 8px; font-weight: 600; font-size: 0.9rem; cursor: pointer; box-shadow: 0 2px 10px rgba(139, 92, 246, 0.3); }
     button.btn-pub:active { transform: scale(0.97); }
 
     .feed { display: flex; flex-direction: column; gap: 16px; }
     .post { background: #131c2e; border-radius: 16px; padding: 16px; border: 1px solid rgba(255,255,255,0.06); }
-    .post-header { display: flex; justify-content: space-between; font-size: 0.82rem; color: #64748b; margin-bottom: 10px; }
+    .post-header { display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; color: #64748b; margin-bottom: 10px; }
+    .author-info { display: flex; align-items: center; gap: 10px; }
     .post-author { color: #38bdf8; font-weight: 700; font-size: 0.9rem; }
-    .post-content { font-size: 0.98rem; line-height: 1.5; color: #e2e8f0; word-break: break-word; margin-bottom: 14px; }
     
+    .follow-btn { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 700; cursor: pointer; }
+    .follow-btn.following { background: #1e293b; color: #94a3b8; border-color: #334155; }
+    
+    .post-content { font-size: 0.98rem; line-height: 1.5; color: #e2e8f0; word-break: break-word; margin-bottom: 14px; }
     .post-footer { display: flex; align-items: center; gap: 12px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 12px; }
-    .action-btn { background: #0b1120; border: 1px solid #1e293b; color: #94a3b8; padding: 6px 16px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s; }
+    .action-btn { background: #0b1120; border: 1px solid #1e293b; color: #94a3b8; padding: 6px 16px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; }
     .action-btn.like-btn { color: #f43f5e; }
     .action-btn.comment-btn { color: #38bdf8; }
-    .action-btn:active { transform: scale(0.95); }
 
     .comments-section { margin-top: 14px; padding-top: 12px; border-top: 1px dashed #1e293b; display: none; }
     .comments-section.open { display: block; }
@@ -86,37 +89,64 @@
     }
     const database = firebase.database();
 
-    // Autenticación con Pi Network
+    let misSeguidos = {};
+
     function autenticarPi() {
       try {
         if (window.Pi) {
           const Pi = window.Pi;
           Pi.init({ version: "2.0", sandbox: false });
-          
-          const scopes = ['username'];
-          function onIncompletePaymentFound(payment) {}
-
-          Pi.authenticate(scopes, onIncompletePaymentFound).then(function(auth) {
+          Pi.authenticate(['username'], function(payment){}).then(function(auth) {
             if (auth && auth.user && auth.user.username) {
               const username = auth.user.username;
               document.getElementById('userInput').value = username;
               document.getElementById('userBadgeText').innerText = '@' + username;
               document.getElementById('statusDot').classList.add('connected');
+              escucharSeguidos(username);
             }
-          }).catch(function(error) {
-            console.log("Error de Auth Pi:", error);
+          }).catch(function() {
             document.getElementById('userBadgeText').innerText = 'Modo Libre';
+            escucharSeguidos(document.getElementById('userInput').value);
           });
         } else {
           document.getElementById('userBadgeText').innerText = 'Modo Libre';
+          escucharSeguidos(document.getElementById('userInput').value);
         }
       } catch(e) {
         document.getElementById('userBadgeText').innerText = 'Modo Libre';
+        escucharSeguidos(document.getElementById('userInput').value);
       }
     }
 
-    // Ejecutar autenticación al cargar
     window.onload = autenticarPi;
+
+    // Escuchar a quién sigue el usuario actual
+    function escucharSeguidos(miUsuario) {
+      database.ref('usuarios/' + miUsuario + '/siguiendo').on('value', (snapshot) => {
+        misSeguidos = snapshot.val() || {};
+        renderFeed();
+      });
+    }
+
+    // Función para seguir / dejar de seguir
+    function toggleSeguir(targetUsuario) {
+      const miUsuario = document.getElementById('userInput').value.trim() || 'Anónimo';
+      if (miUsuario === targetUsuario) {
+        alert("No puedes seguirte a ti mismo.");
+        return;
+      }
+
+      const siguiendoRef = database.ref('usuarios/' + miUsuario + '/siguiendo/' + targetUsuario);
+      const seguidorRef = database.ref('usuarios/' + targetUsuario + '/seguidores/' + miUsuario);
+
+      if (misSeguidos[targetUsuario]) {
+        siguiendoRef.remove();
+        seguidorRef.remove();
+      } else {
+        siguiendoRef.set(true);
+        seguidorRef.set(true);
+      }
+    }
 
     function publicar() {
       const input = document.getElementById('postInput');
@@ -134,8 +164,7 @@
       };
 
       database.ref('publicaciones').push(nuevaPublicacion)
-        .then(() => { input.value = ''; })
-        .catch((err) => { alert('Error al publicar: ' + err.message); });
+        .then(() => { input.value = ''; });
     }
 
     function darLike(postId) {
@@ -157,31 +186,47 @@
 
       if (!texto) return;
 
-      const nuevoComentario = {
+      database.ref('publicaciones/' + postId + '/comentarios').push({
         usuario: usuario,
         texto: texto,
         fecha: Date.now()
-      };
-
-      database.ref('publicaciones/' + postId + '/comentarios').push(nuevoComentario)
-        .then(() => { input.value = ''; });
+      }).then(() => { input.value = ''; });
     }
 
+    let ultimosDatosPublicaciones = null;
+
     database.ref('publicaciones').on('value', (snapshot) => {
+      ultimosDatosPublicaciones = snapshot.val();
+      renderFeed();
+    });
+
+    function renderFeed() {
       const feed = document.getElementById('feed');
       feed.innerHTML = '';
-      const data = snapshot.val();
+      const miUsuario = document.getElementById('userInput').value.trim() || 'Anónimo';
 
-      if (data) {
-        const keys = Object.keys(data).reverse();
+      if (ultimosDatosPublicaciones) {
+        const keys = Object.keys(ultimosDatosPublicaciones).reverse();
         keys.forEach(key => {
-          const post = data[key];
+          const post = ultimosDatosPublicaciones[key];
           const fecha = new Date(post.fecha).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
           const likesCount = post.likes || 0;
           
           const comentariosObj = post.comentarios || {};
           const comentariosArr = Object.values(comentariosObj);
           const commentsCount = comentariosArr.length;
+
+          const esMiPost = post.usuario === miUsuario;
+          const loSigo = misSeguidos[post.usuario];
+
+          let botonSeguirHTML = '';
+          if (!esMiPost) {
+            botonSeguirHTML = `
+              <button class="follow-btn ${loSigo ? 'following' : ''}" onclick="toggleSeguir('${post.usuario}')">
+                ${loSigo ? 'Siguiendo' : '+ Seguir'}
+              </button>
+            `;
+          }
 
           let htmlComentarios = '';
           comentariosArr.forEach(c => {
@@ -197,7 +242,10 @@
           postEl.className = 'post';
           postEl.innerHTML = `
             <div class="post-header">
-              <span class="post-author">@${post.usuario}</span>
+              <div class="author-info">
+                <span class="post-author">@${post.usuario}</span>
+                ${botonSeguirHTML}
+              </div>
               <span>${fecha}</span>
             </div>
             <div class="post-content">${post.texto}</div>
@@ -220,7 +268,7 @@
           feed.appendChild(postEl);
         });
       }
-    });
+    }
   </script>
 </body>
 </html>
